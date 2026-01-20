@@ -1,0 +1,7 @@
+---
+# Default variables for github_repos role
+
+github_ssh_key_name: github_deploy_key
+github_repos_owner: root
+github_repos_group: root
+github_repos: []

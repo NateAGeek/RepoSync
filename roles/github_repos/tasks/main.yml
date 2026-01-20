@@ -1,0 +1,67 @@
+---
+# GitHub repos role - deploys SSH key and clones repositories
+
+- name: Ensure .ssh directory exists for repo owner
+  ansible.builtin.file:
+    path: "{{ (github_repos_owner == 'root') | ternary('/root', '/home/' + github_repos_owner) }}/.ssh"
+    state: directory
+    owner: "{{ github_repos_owner }}"
+    group: "{{ github_repos_group }}"
+    mode: '0700'
+
+- name: Deploy GitHub SSH private key
+  ansible.builtin.copy:
+    content: "{{ github_ssh_key }}"
+    dest: "{{ (github_repos_owner == 'root') | ternary('/root', '/home/' + github_repos_owner) }}/.ssh/{{ github_ssh_key_name }}"
+    owner: "{{ github_repos_owner }}"
+    group: "{{ github_repos_group }}"
+    mode: '0600'
+  no_log: true
+
+- name: Configure SSH for GitHub
+  ansible.builtin.copy:
+    dest: "{{ (github_repos_owner == 'root') | ternary('/root', '/home/' + github_repos_owner) }}/.ssh/config"
+    content: |
+      Host github.com
+        HostName github.com
+        User git
+        IdentityFile {{ (github_repos_owner == 'root') | ternary('/root', '/home/' + github_repos_owner) }}/.ssh/{{ github_ssh_key_name }}
+        IdentitiesOnly yes
+        StrictHostKeyChecking accept-new
+    owner: "{{ github_repos_owner }}"
+    group: "{{ github_repos_group }}"
+    mode: '0600'
+
+- name: Ensure parent directories exist for repos
+  ansible.builtin.file:
+    path: "{{ item.dest | dirname }}"
+    state: directory
+    owner: "{{ item.owner | default(github_repos_owner) }}"
+    group: "{{ item.group | default(github_repos_group) }}"
+    mode: '0755'
+  loop: "{{ github_repos }}"
+  when: github_repos | length > 0
+
+- name: Clone GitHub repositories
+  ansible.builtin.git:
+    repo: "{{ item.repo }}"
+    dest: "{{ item.dest }}"
+    version: "{{ item.version | default('main') }}"
+    accept_hostkey: yes
+    force: "{{ item.force | default(false) }}"
+    depth: "{{ item.depth | default(omit) }}"
+    recursive: "{{ item.recursive | default(true) }}"
+  become: yes
+  become_user: "{{ item.owner | default(github_repos_owner) }}"
+  loop: "{{ github_repos }}"
+  when: github_repos | length > 0
+
+- name: Set ownership on cloned repositories
+  ansible.builtin.file:
+    path: "{{ item.dest }}"
+    state: directory
+    owner: "{{ item.owner | default(github_repos_owner) }}"
+    group: "{{ item.group | default(github_repos_group) }}"
+    recurse: yes
+  loop: "{{ github_repos }}"
+  when: github_repos | length > 0

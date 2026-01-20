@@ -1,0 +1,10 @@
+---
+# Default variables for syncthing role
+
+syncthing_user: syncthing
+syncthing_group: syncthing
+syncthing_home: /home/syncthing
+syncthing_config_dir: "{{ syncthing_home }}/.config/syncthing"
+syncthing_gui_address: "127.0.0.1:8384"
+syncthing_folders: []
+syncthing_devices: []

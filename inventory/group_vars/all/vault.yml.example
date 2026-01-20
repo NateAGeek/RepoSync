@@ -1,0 +1,39 @@
+---
+# ============================================
+# Vault Variables (Secrets)
+# ============================================
+# 
+# INSTRUCTIONS:
+# 1. Copy this file to vault.yml:
+#    cp vault.yml.example vault.yml
+#
+# 2. Edit vault.yml with your actual secrets
+#
+# 3. Encrypt the vault file:
+#    ansible-vault encrypt inventory/group_vars/all/vault.yml
+#
+# 4. To edit later:
+#    ansible-vault edit inventory/group_vars/all/vault.yml
+#
+# 5. To run playbooks with vault:
+#    ansible-playbook playbooks/site.yml --ask-vault-pass
+#    OR
+#    ansible-playbook playbooks/site.yml --vault-password-file ~/.vault_pass
+# ============================================
+
+# Tailscale auth key
+# Generate at: https://login.tailscale.com/admin/settings/keys
+# Recommended: Use a reusable, ephemeral key with appropriate tags
+vault_tailscale_authkey: "tskey-auth-xxxxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# GitHub SSH deploy key (private key content)
+# Generate with: ssh-keygen -t ed25519 -C "ansible-deploy" -f github_deploy_key
+# Add the public key to your GitHub repo(s) as a deploy key
+vault_github_ssh_key: |
+  -----BEGIN OPENSSH PRIVATE KEY-----
+  YOUR_PRIVATE_KEY_CONTENT_HERE
+  -----END OPENSSH PRIVATE KEY-----
+
+# Syncthing GUI password (optional)
+# Leave empty to disable authentication
+vault_syncthing_gui_password: "your-secure-password-here"

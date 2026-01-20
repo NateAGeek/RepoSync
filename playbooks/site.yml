@@ -1,0 +1,80 @@
+---
+# Main playbook - orchestrates all roles
+#
+# Usage:
+#   ansible-playbook playbooks/site.yml --ask-vault-pass
+#   ansible-playbook playbooks/site.yml --vault-password-file ~/.vault_pass
+#
+# Run specific roles with tags:
+#   ansible-playbook playbooks/site.yml --tags "firewall" --ask-vault-pass
+#   ansible-playbook playbooks/site.yml --tags "syncthing,github" --ask-vault-pass
+
+- name: Configure infrastructure
+  hosts: all
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: Validate required variables
+      ansible.builtin.assert:
+        that:
+          - tailscale_authkey is defined
+          - tailscale_authkey | length > 0
+        fail_msg: "tailscale_authkey must be defined and not empty"
+        success_msg: "Required variables validated"
+      tags: always
+
+  roles:
+    - role: common
+      tags:
+        - common
+        - base
+
+    - role: tailscale
+      tags:
+        - tailscale
+        - vpn
+
+    - role: firewall
+      tags:
+        - firewall
+        - security
+
+    - role: github_repos
+      tags:
+        - github
+        - repos
+      when: github_repos | length > 0
+
+    - role: github_sync
+      tags:
+        - github
+        - sync
+        - cron
+      when: github_repos | length > 0 and github_sync_enabled | default(true) | bool
+
+    - role: syncthing
+      tags:
+        - syncthing
+        - sync
+
+  post_tasks:
+    - name: Display summary
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          Configuration Complete for {{ inventory_hostname }}
+          ========================================
+          Tailscale IP: {{ tailscale_ip }}
+          Syncthing Device ID: {{ syncthing_local_device_id | default('N/A') }}
+          Syncthing GUI: http://{{ syncthing_gui_address }}
+          
+          Firewall Status: UFW enabled (Tailscale-only access)
+          SSH Access: Via Tailscale only
+          {% if github_repos | length > 0 and github_sync_enabled | default(true) %}
+
+          GitHub Sync: Enabled ({{ github_sync_cron_minute }} {{ github_sync_cron_hour }} {{ github_sync_cron_day }} {{ github_sync_cron_month }} {{ github_sync_cron_weekday }})
+          {% endif %}
+
+          ========================================
+      tags: always

@@ -1,0 +1,11 @@
+---
+# Syncthing role handlers
+
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: yes
+
+- name: Restart syncthing
+  ansible.builtin.systemd:
+    name: "syncthing@{{ syncthing_user }}"
+    state: restarted

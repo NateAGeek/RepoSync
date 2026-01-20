@@ -1,0 +1,110 @@
+---
+# ============================================
+# Global Variables
+# ============================================
+
+# Tailscale Configuration
+# -----------------------
+# Auth key should be stored in vault.yml
+tailscale_authkey: "{{ vault_tailscale_authkey }}"
+# Set to true to accept routes advertised by other nodes
+tailscale_accept_routes: false
+# Set to true to advertise this node as an exit node
+tailscale_exit_node: false
+
+# Syncthing Configuration
+# -----------------------
+syncthing_user: syncthing
+syncthing_group: syncthing
+syncthing_home: /home/syncthing
+syncthing_config_dir: "{{ syncthing_home }}/.config/syncthing"
+
+# GUI settings - bind to Tailscale IP for security
+# Override per-host with tailscale_ip variable
+syncthing_gui_address: "{{ tailscale_ip | default('127.0.0.1') }}:8384"
+syncthing_gui_user: admin
+syncthing_gui_password: "{{ vault_syncthing_gui_password | default('') }}"
+
+# Syncthing folders to sync
+# Example:
+# syncthing_folders:
+#   - id: documents
+#     label: Documents
+#     path: "{{ syncthing_home }}/Documents"
+#     devices:
+#       - device1
+#       - device2
+#   - id: projects
+#     label: Projects
+#     path: "{{ syncthing_home }}/Projects"
+#     devices:
+#       - device1
+syncthing_folders: []
+
+# Syncthing devices to connect with
+# Example:
+# syncthing_devices:
+#   - id: XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX
+#     name: device1
+#     addresses:
+#       - dynamic
+#       - tcp://100.64.0.5:22000
+#   - id: YYYYYYY-YYYYYYY-YYYYYYY-YYYYYYY-YYYYYYY-YYYYYYY-YYYYYYY-YYYYYYY
+#     name: device2
+#     addresses:
+#       - dynamic
+syncthing_devices: []
+
+# GitHub Repositories Configuration
+# ----------------------------------
+# SSH key should be stored in vault.yml
+github_ssh_key: "{{ vault_github_ssh_key }}"
+github_ssh_key_name: github_deploy_key
+
+# User to own the cloned repositories
+github_repos_owner: root
+github_repos_group: root
+
+# Repositories to clone
+# Example:
+# github_repos:
+#   - repo: git@github.com:myorg/myrepo.git
+#     dest: /opt/projects/myrepo
+#     version: main
+#   - repo: git@github.com:myorg/another-repo.git
+#     dest: /opt/projects/another-repo
+#     version: develop
+github_repos: []
+
+# GitHub Sync (Cron) Configuration
+# ---------------------------------
+# Periodically pulls new commits from remote. Safe mode only:
+#   - Only fast-forward pulls (no merge commits)
+#   - Skips repos with local changes (uncommitted or unpushed)
+#   - Never modifies, commits, or forces anything
+
+github_sync_enabled: true
+
+# Cron schedule (default: every 15 minutes)
+# Format: minute hour day month weekday
+github_sync_cron_minute: "*/15"
+github_sync_cron_hour: "*"
+github_sync_cron_day: "*"
+github_sync_cron_month: "*"
+github_sync_cron_weekday: "*"
+
+# Optional: Slack notifications on sync failure
+# github_sync_notify_on_failure: true
+# github_sync_slack_webhook: "https://hooks.slack.com/services/XXX/YYY/ZZZ"
+
+# Firewall Configuration
+# ----------------------
+# Strategy: All traffic on tailscale0 interface is allowed.
+#           Everything else is blocked by default.
+#
+# If you need to expose ports publicly (outside Tailscale), add them here:
+# Example:
+# firewall_public_ports:
+#   - { port: 80, proto: tcp, comment: "HTTP" }
+#   - { port: 443, proto: tcp, comment: "HTTPS" }
+firewall_public_ports: []

@@ -1,0 +1,56 @@
+---
+# GitHub Sync role - sets up cron jobs to periodically pull repos
+
+- name: Create sync script directory
+  ansible.builtin.file:
+    path: "{{ github_sync_script_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Create log directory
+  ansible.builtin.file:
+    path: "{{ github_sync_log_dir }}"
+    state: directory
+    owner: "{{ github_repos_owner }}"
+    group: "{{ github_repos_group }}"
+    mode: '0755'
+
+- name: Deploy GitHub sync script
+  ansible.builtin.template:
+    src: github-sync.sh.j2
+    dest: "{{ github_sync_script_dir }}/github-sync.sh"
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Create cron job for GitHub sync
+  ansible.builtin.cron:
+    name: "GitHub repo sync"
+    minute: "{{ github_sync_cron_minute }}"
+    hour: "{{ github_sync_cron_hour }}"
+    day: "{{ github_sync_cron_day }}"
+    month: "{{ github_sync_cron_month }}"
+    weekday: "{{ github_sync_cron_weekday }}"
+    job: "{{ github_sync_script_dir }}/github-sync.sh >> {{ github_sync_log_dir }}/sync.log 2>&1"
+    user: "{{ github_repos_owner }}"
+    state: present
+  when: github_sync_enabled | bool
+
+- name: Set up log rotation for sync logs
+  ansible.builtin.copy:
+    dest: /etc/logrotate.d/github-sync
+    content: |
+      {{ github_sync_log_dir }}/sync.log {
+          weekly
+          rotate 4
+          compress
+          delaycompress
+          missingok
+          notifempty
+          create 644 {{ github_repos_owner }} {{ github_repos_group }}
+      }
+    owner: root
+    group: root
+    mode: '0644'

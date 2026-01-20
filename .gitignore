@@ -1,0 +1,36 @@
+# Ansible cache directory
+.ansible_cache/
+
+# Vault password file
+.vault_pass
+*.vault_pass
+
+# Encrypted vault files (keep these, but be careful)
+# vault.yml
+
+# Retry files
+*.retry
+
+# SSH keys
+*.pem
+*.key
+id_rsa
+id_ed25519
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+.env
+venv/

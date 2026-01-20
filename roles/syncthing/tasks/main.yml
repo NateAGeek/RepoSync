@@ -1,0 +1,123 @@
+---
+# Syncthing role - installs and configures Syncthing
+
+- name: Add Syncthing GPG key
+  ansible.builtin.apt_key:
+    url: https://syncthing.net/release-key.gpg
+    keyring: /usr/share/keyrings/syncthing-archive-keyring.gpg
+    state: present
+
+- name: Add Syncthing repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/usr/share/keyrings/syncthing-archive-keyring.gpg] https://apt.syncthing.net/ syncthing stable"
+    filename: syncthing
+    state: present
+
+- name: Install Syncthing
+  ansible.builtin.apt:
+    name: syncthing
+    state: present
+    update_cache: yes
+
+- name: Create Syncthing group
+  ansible.builtin.group:
+    name: "{{ syncthing_group }}"
+    state: present
+
+- name: Create Syncthing user
+  ansible.builtin.user:
+    name: "{{ syncthing_user }}"
+    group: "{{ syncthing_group }}"
+    home: "{{ syncthing_home }}"
+    shell: /bin/bash
+    create_home: yes
+    state: present
+
+- name: Enable lingering for Syncthing user (for user systemd services)
+  ansible.builtin.command: loginctl enable-linger {{ syncthing_user }}
+  args:
+    creates: /var/lib/systemd/linger/{{ syncthing_user }}
+
+- name: Ensure Syncthing config directory exists
+  ansible.builtin.file:
+    path: "{{ syncthing_config_dir }}"
+    state: directory
+    owner: "{{ syncthing_user }}"
+    group: "{{ syncthing_group }}"
+    mode: '0700'
+
+- name: Generate initial Syncthing config if not exists
+  ansible.builtin.command: >
+    su - {{ syncthing_user }} -c 'syncthing generate --config={{ syncthing_config_dir }}'
+  args:
+    creates: "{{ syncthing_config_dir }}/config.xml"
+
+- name: Get current device ID
+  ansible.builtin.command: >
+    su - {{ syncthing_user }} -c 'syncthing --home={{ syncthing_config_dir }} --device-id'
+  register: syncthing_device_id
+  changed_when: false
+
+- name: Set device ID fact
+  ansible.builtin.set_fact:
+    syncthing_local_device_id: "{{ syncthing_device_id.stdout | trim }}"
+
+- name: Display local Syncthing device ID
+  ansible.builtin.debug:
+    msg: "Syncthing Device ID for {{ inventory_hostname }}: {{ syncthing_local_device_id }}"
+
+- name: Deploy Syncthing configuration
+  ansible.builtin.template:
+    src: config.xml.j2
+    dest: "{{ syncthing_config_dir }}/config.xml"
+    owner: "{{ syncthing_user }}"
+    group: "{{ syncthing_group }}"
+    mode: '0600'
+    backup: yes
+  notify: Restart syncthing
+
+- name: Create sync folder directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ syncthing_user }}"
+    group: "{{ syncthing_group }}"
+    mode: '0755'
+  loop: "{{ syncthing_folders }}"
+  when: syncthing_folders | length > 0
+
+- name: Create systemd service for Syncthing
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/syncthing@.service
+    content: |
+      [Unit]
+      Description=Syncthing - Open Source Continuous File Synchronization for %i
+      Documentation=man:syncthing(1)
+      After=network.target
+
+      [Service]
+      User=%i
+      ExecStart=/usr/bin/syncthing serve --no-browser --no-restart --logflags=0
+      Restart=on-failure
+      RestartSec=10
+      SuccessExitStatus=3 4
+      RestartForceExitStatus=3 4
+
+      # Hardening
+      ProtectSystem=full
+      PrivateTmp=true
+      SystemCallArchitectures=native
+      MemoryDenyWriteExecute=true
+      NoNewPrivileges=true
+
+      [Install]
+      WantedBy=multi-user.target
+    mode: '0644'
+  notify: Reload systemd
+
+- name: Enable and start Syncthing service
+  ansible.builtin.systemd:
+    name: "syncthing@{{ syncthing_user }}"
+    enabled: yes
+    state: started
+    daemon_reload: yes

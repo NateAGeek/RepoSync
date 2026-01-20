@@ -1,0 +1,20 @@
+---
+# Default variables for github_sync role
+
+# Enable/disable the cron job
+github_sync_enabled: true
+
+# Cron schedule (default: every 15 minutes)
+github_sync_cron_minute: "*/15"
+github_sync_cron_hour: "*"
+github_sync_cron_day: "*"
+github_sync_cron_month: "*"
+github_sync_cron_weekday: "*"
+
+# Script and log locations
+github_sync_script_dir: /opt/scripts
+github_sync_log_dir: /var/log/github-sync
+
+# Optional: Slack notifications on failure
+github_sync_notify_on_failure: false
+github_sync_slack_webhook: ""

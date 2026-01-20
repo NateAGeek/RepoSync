@@ -1,0 +1,48 @@
+---
+# Firewall role - configures UFW to only allow Tailscale traffic
+#
+# Strategy: Allow everything on tailscale0 interface, block all else.
+# This is simpler and more secure than IP-based rules.
+
+- name: Ensure UFW is installed
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+
+- name: Set UFW default policy - deny incoming
+  community.general.ufw:
+    direction: incoming
+    policy: deny
+
+- name: Set UFW default policy - allow outgoing
+  community.general.ufw:
+    direction: outgoing
+    policy: allow
+
+- name: Allow all traffic on Tailscale interface
+  community.general.ufw:
+    rule: allow
+    interface: tailscale0
+    direction: in
+    comment: "Allow all Tailscale VPN traffic"
+
+# Optional: Allow additional ports on non-Tailscale interfaces
+# (e.g., if you need a public web server)
+- name: Allow additional ports from any source
+  community.general.ufw:
+    rule: allow
+    port: "{{ item.port | string }}"
+    proto: "{{ item.proto }}"
+    comment: "{{ item.comment | default('Custom allowed port') }}"
+  loop: "{{ firewall_public_ports | default([]) }}"
+  when: firewall_public_ports is defined and firewall_public_ports | length > 0
+
+- name: Enable UFW
+  community.general.ufw:
+    state: enabled
+
+- name: Ensure UFW is running
+  ansible.builtin.systemd:
+    name: ufw
+    enabled: yes
+    state: started
