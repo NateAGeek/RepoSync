@@ -1,0 +1,103 @@
+---
+# GitHub Fetch Repos role - dynamically fetches repository list from GitHub API
+
+- name: Validate required variables
+  ansible.builtin.assert:
+    that:
+      - github_username is defined and github_username | length > 0
+      - github_token is defined and github_token | length > 0
+    fail_msg: "github_username and github_token must be defined and not empty"
+
+- name: Initialize variables
+  ansible.builtin.set_fact:
+    _github_all_repos: []
+    _github_page: 1
+    _github_has_more: true
+
+- name: Fetch repositories from GitHub API (first page)
+  ansible.builtin.uri:
+    url: "https://api.github.com/user/repos?per_page={{ github_fetch_per_page }}&page={{ _github_page }}&visibility={{ github_fetch_visibility }}&affiliation=owner"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ github_token }}"
+      Accept: "application/vnd.github+json"
+      X-GitHub-Api-Version: "2022-11-28"
+    return_content: yes
+    status_code: 200
+  register: _github_api_response
+  until: _github_api_response.status == 200
+  retries: 3
+  delay: 5
+
+- name: Process first page of repositories
+  ansible.builtin.set_fact:
+    _github_all_repos: "{{ _github_api_response.json }}"
+    _github_has_more: "{{ (_github_api_response.json | length) == (github_fetch_per_page | int) }}"
+    _github_page: 2
+
+- name: Fetch additional pages if needed
+  ansible.builtin.include_tasks: fetch_page.yml
+  when: _github_has_more | bool
+
+# Filter repositories based on configuration
+- name: Apply fork filter
+  ansible.builtin.set_fact:
+    _github_filtered_repos: "{{ _github_all_repos | rejectattr('fork', 'equalto', true) | list }}"
+  when: github_fetch_exclude_forks | bool
+
+- name: Skip fork filter
+  ansible.builtin.set_fact:
+    _github_filtered_repos: "{{ _github_all_repos }}"
+  when: not (github_fetch_exclude_forks | bool)
+
+- name: Apply archived filter
+  ansible.builtin.set_fact:
+    _github_filtered_repos: "{{ _github_filtered_repos | rejectattr('archived', 'equalto', true) | list }}"
+  when: github_fetch_exclude_archived | bool
+
+# Transform to github_repos format
+- name: Build github_repos list
+  ansible.builtin.set_fact:
+    github_repos: |
+      {% set repos = [] %}
+      {% for repo in _github_filtered_repos %}
+      {%   set _ = repos.append({
+             'repo': 'git@github.com:' ~ repo.full_name ~ '.git',
+             'dest': github_repos_base_path ~ '/' ~ repo.full_name,
+             'version': repo.default_branch | default('main')
+           }) %}
+      {% endfor %}
+      {{ repos | to_json }}
+
+- name: Parse github_repos from JSON
+  ansible.builtin.set_fact:
+    github_repos: "{{ github_repos | from_json }}"
+
+# Merge with any extra repos defined manually
+- name: Merge with extra repositories
+  ansible.builtin.set_fact:
+    github_repos: "{{ github_repos + (github_repos_extra | default([])) }}"
+  when: github_repos_extra is defined and github_repos_extra | length > 0
+
+- name: Display discovered repositories
+  ansible.builtin.debug:
+    msg: |
+      GitHub Repository Discovery Complete
+      =====================================
+      Total repos found: {{ _github_all_repos | length }}
+      After filtering: {{ _github_filtered_repos | length }}
+      Excluded forks: {{ github_fetch_exclude_forks }}
+      Excluded archived: {{ github_fetch_exclude_archived }}
+      
+      Repositories to clone:
+      {% for repo in github_repos %}
+        - {{ repo.repo }} -> {{ repo.dest }} ({{ repo.version }})
+      {% endfor %}
+
+- name: Ensure base repos directory exists
+  ansible.builtin.file:
+    path: "{{ github_repos_base_path }}"
+    state: directory
+    owner: "{{ github_repos_owner | default('root') }}"
+    group: "{{ github_repos_group | default('root') }}"
+    mode: '0755'

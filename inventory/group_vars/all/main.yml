@@ -26,20 +26,29 @@ syncthing_gui_user: admin
 syncthing_gui_password: "{{ vault_syncthing_gui_password | default('') }}"
 
 # Syncthing folders to sync
-# Example:
+# The github-repos folder syncs all cloned repositories
+# Add your device names to the 'devices' list after configuring syncthing_devices below
+syncthing_folders:
+  - id: github-repos
+    label: GitHub Repos
+    path: "{{ github_repos_base_path | default('/opt/repos') }}"
+    type: sendreceive
+    rescan_interval: 3600
+    devices: []  # Add your device names here, e.g.: [my-laptop, my-desktop]
+
+# Example for additional folders:
 # syncthing_folders:
+#   - id: github-repos
+#     label: GitHub Repos
+#     path: "{{ github_repos_base_path }}"
+#     type: sendreceive
+#     devices:
+#       - my-laptop
 #   - id: documents
 #     label: Documents
 #     path: "{{ syncthing_home }}/Documents"
 #     devices:
-#       - device1
-#       - device2
-#   - id: projects
-#     label: Projects
-#     path: "{{ syncthing_home }}/Projects"
-#     devices:
-#       - device1
-syncthing_folders: []
+#       - my-laptop
 
 # Syncthing devices to connect with
 # Example:
@@ -65,15 +74,39 @@ github_ssh_key_name: github_deploy_key
 github_repos_owner: root
 github_repos_group: root
 
-# Repositories to clone
+# GitHub Auto-Fetch Configuration
+# --------------------------------
+# Automatically discover and clone all your GitHub repositories
+# Requires a GitHub Personal Access Token (PAT) with 'repo' scope
+
+# Enable automatic repository discovery from GitHub API
+github_fetch_enabled: true
+
+# Your GitHub username (REQUIRED - set this to your username)
+github_username: ""
+
+# GitHub Personal Access Token (from vault)
+github_token: "{{ vault_github_token }}"
+
+# Base path where repositories will be cloned
+# Repos will be cloned to: {{ github_repos_base_path }}/{{ owner }}/{{ repo_name }}
+github_repos_base_path: /opt/repos
+
+# Filter options
+github_fetch_exclude_forks: true      # Skip forked repositories
+github_fetch_exclude_archived: true   # Skip archived repositories
+
+# Manual repository list (used if github_fetch_enabled is false)
+# Or merged with auto-fetched repos if you want to add extras
 # Example:
-# github_repos:
-#   - repo: git@github.com:myorg/myrepo.git
-#     dest: /opt/projects/myrepo
+# github_repos_extra:
+#   - repo: git@github.com:other-org/some-repo.git
+#     dest: /opt/repos/other-org/some-repo
 #     version: main
-#   - repo: git@github.com:myorg/another-repo.git
-#     dest: /opt/projects/another-repo
-#     version: develop
+github_repos_extra: []
+
+# This will be populated dynamically by github_fetch_repos role
+# Or set manually if github_fetch_enabled is false
 github_repos: []
 
 # GitHub Sync (Cron) Configuration

@@ -37,3 +37,11 @@ vault_github_ssh_key: |
 # Syncthing GUI password (optional)
 # Leave empty to disable authentication
 vault_syncthing_gui_password: "your-secure-password-here"
+
+# GitHub Personal Access Token (PAT)
+# Generate at: https://github.com/settings/tokens
+# Required scopes:
+#   - repo (full access to private and public repos)
+# Note: This is used for GitHub API calls to discover your repositories
+#       The SSH key above is still used for cloning
+vault_github_token: "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"

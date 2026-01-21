@@ -5,8 +5,9 @@
 .vault_pass
 *.vault_pass
 
-# Encrypted vault files (keep these, but be careful)
-# vault.yml
+# Encrypted vault files (excluded from git for security)
+vault.yml
+**/vault.yml
 
 # Retry files
 *.retry

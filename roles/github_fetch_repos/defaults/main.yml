@@ -1,0 +1,26 @@
+---
+# Default variables for github_fetch_repos role
+
+# Enable/disable automatic repository fetching from GitHub API
+github_fetch_enabled: true
+
+# GitHub username to fetch repositories from
+github_username: ""
+
+# GitHub Personal Access Token (should come from vault)
+# Required scopes: repo (for private repos), or public_repo (for public only)
+github_token: ""
+
+# Base path where repositories will be cloned
+# Repos will be cloned to: {{ github_repos_base_path }}/{{ owner }}/{{ repo_name }}
+github_repos_base_path: /opt/repos
+
+# Filter options
+github_fetch_exclude_forks: true
+github_fetch_exclude_archived: true
+
+# Visibility filter: all, public, or private
+github_fetch_visibility: "all"
+
+# API pagination settings
+github_fetch_per_page: 100

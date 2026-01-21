@@ -1,0 +1,67 @@
+// Syncthing ignore file for GitHub repositories
+// This syncs Git config but excludes volatile/local-specific data
+//
+// Synced (important for repo identity):
+//   .git/config         - Remote URLs, branch settings
+//   .git/description    - Repo description
+//   .git/HEAD           - Current branch reference
+//   .git/hooks/         - Git hooks
+//   .git/info/          - Local excludes, attributes
+//
+// Excluded (volatile/local-specific):
+//   .git/index          - Staging area (changes constantly)
+//   .git/logs/          - Reflog history (local)
+//   .git/objects/       - Object database (let git fetch handle this)
+//   .git/refs/          - Branch/tag references (local state)
+//   .git/COMMIT_EDITMSG - Temporary commit message
+//   .git/FETCH_HEAD     - Fetch state
+//   .git/ORIG_HEAD      - Rebase/merge state
+//   .git/MERGE_HEAD     - Merge state
+//   .git/packed-refs    - Packed references
+//   .git/shallow        - Shallow clone info
+
+// Exclude volatile .git internals
+**/.git/index
+**/.git/logs
+**/.git/objects
+**/.git/refs
+**/.git/COMMIT_EDITMSG
+**/.git/FETCH_HEAD
+**/.git/ORIG_HEAD
+**/.git/MERGE_HEAD
+**/.git/REBASE_HEAD
+**/.git/packed-refs
+**/.git/shallow
+**/.git/gc.log
+**/.git/sourcetreeconfig
+**/.git/lfs
+
+// Exclude lock files
+**/.git/*.lock
+**/.git/**/*.lock
+
+// Exclude temporary files
+**/.git/tmp
+**/.git/*_BACKUP_*
+**/.git/*_BASE_*
+**/.git/*_LOCAL_*
+**/.git/*_REMOTE_*
+
+// Exclude IDE/editor specific files
+**/.idea
+**/.vscode
+**/*.swp
+**/*.swo
+**/*~
+**/.DS_Store
+**/Thumbs.db
+
+// Exclude common build/dependency directories (optional - comment out if you want these synced)
+// **/node_modules
+// **/vendor
+// **/__pycache__
+// **/venv
+// **/.venv
+// **/target
+// **/build
+// **/dist

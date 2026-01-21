@@ -40,18 +40,24 @@
         - firewall
         - security
 
+    - role: github_fetch_repos
+      tags:
+        - github
+        - fetch
+      when: github_fetch_enabled | default(false) | bool
+
     - role: github_repos
       tags:
         - github
         - repos
-      when: github_repos | length > 0
+      when: github_repos is defined and github_repos | length > 0
 
     - role: github_sync
       tags:
         - github
         - sync
         - cron
-      when: github_repos | length > 0 and github_sync_enabled | default(true) | bool
+      when: github_repos is defined and github_repos | length > 0 and github_sync_enabled | default(true) | bool
 
     - role: syncthing
       tags:
