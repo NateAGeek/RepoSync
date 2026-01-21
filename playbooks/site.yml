@@ -1,27 +1,198 @@
 ---
 # Main playbook - orchestrates all roles
 #
-# Usage:
+# Usage (Interactive Mode - prompts for secrets):
+#   ansible-playbook playbooks/site.yml
+#
+# Usage (Vault Mode - uses encrypted vault):
 #   ansible-playbook playbooks/site.yml --ask-vault-pass
 #   ansible-playbook playbooks/site.yml --vault-password-file ~/.vault_pass
 #
 # Run specific roles with tags:
-#   ansible-playbook playbooks/site.yml --tags "firewall" --ask-vault-pass
-#   ansible-playbook playbooks/site.yml --tags "syncthing,github" --ask-vault-pass
+#   ansible-playbook playbooks/site.yml --tags "firewall"
+#   ansible-playbook playbooks/site.yml --tags "syncthing,github"
+#
+# Skip roles:
+#   ansible-playbook playbooks/site.yml --skip-tags "tailscale,firewall"
 
 - name: Configure infrastructure
   hosts: all
   become: true
   gather_facts: true
 
+  vars_prompt:
+    # Tailscale Auth Key
+    - name: prompt_tailscale_authkey
+      prompt: |
+
+        ============================================
+        TAILSCALE SETUP
+        ============================================
+        Enter your Tailscale Auth Key
+        (Get one at https://login.tailscale.com/admin/settings/keys)
+        Leave blank to use vault value
+      private: yes
+      default: ""
+
+    # GitHub Username
+    - name: prompt_github_username
+      prompt: |
+
+        ============================================
+        GITHUB SETUP
+        ============================================
+        Enter your GitHub username
+        Leave blank to use config value
+      private: no
+      default: ""
+
+    # GitHub Token
+    - name: prompt_github_token
+      prompt: |
+        Enter your GitHub Personal Access Token
+        (Get one at https://github.com/settings/tokens - needs 'repo' scope)
+        Leave blank to use vault value
+      private: yes
+      default: ""
+
+    # GitHub SSH Key
+    - name: prompt_github_ssh_key
+      prompt: |
+        Enter path to your GitHub SSH private key file
+        (e.g., ~/.ssh/id_ed25519 or ~/.ssh/github_deploy_key)
+        Leave blank to use vault value
+      private: no
+      default: ""
+
+    # Syncthing Password
+    - name: prompt_syncthing_password
+      prompt: |
+
+        ============================================
+        SYNCTHING SETUP
+        ============================================
+        Enter a password for Syncthing Web GUI
+        Leave blank for no authentication
+      private: yes
+      default: ""
+
   pre_tasks:
-    - name: Validate required variables
+    # Load SSH key from file if path was provided
+    - name: Read SSH key from file
+      ansible.builtin.set_fact:
+        _ssh_key_from_file: "{{ lookup('file', prompt_github_ssh_key) }}"
+      when: prompt_github_ssh_key | length > 0
+      delegate_to: localhost
+      become: no
+
+    # Set effective values (prompt overrides vault/config)
+    - name: Set effective Tailscale auth key
+      ansible.builtin.set_fact:
+        tailscale_authkey: "{{ prompt_tailscale_authkey if prompt_tailscale_authkey | length > 0 else (vault_tailscale_authkey | default('')) }}"
+
+    - name: Set effective GitHub username
+      ansible.builtin.set_fact:
+        github_username: "{{ prompt_github_username if prompt_github_username | length > 0 else (github_username | default('')) }}"
+
+    - name: Set effective GitHub token
+      ansible.builtin.set_fact:
+        github_token: "{{ prompt_github_token if prompt_github_token | length > 0 else (vault_github_token | default('')) }}"
+
+    - name: Set effective GitHub SSH key
+      ansible.builtin.set_fact:
+        github_ssh_key: "{{ _ssh_key_from_file if _ssh_key_from_file is defined else (vault_github_ssh_key | default('')) }}"
+
+    - name: Set effective Syncthing password
+      ansible.builtin.set_fact:
+        syncthing_gui_password: "{{ prompt_syncthing_password if prompt_syncthing_password | length > 0 else (vault_syncthing_gui_password | default('')) }}"
+
+    # Validate required variables
+    - name: Validate Tailscale auth key
       ansible.builtin.assert:
         that:
           - tailscale_authkey is defined
           - tailscale_authkey | length > 0
-        fail_msg: "tailscale_authkey must be defined and not empty"
-        success_msg: "Required variables validated"
+        fail_msg: |
+          
+          ERROR: Tailscale auth key is required!
+          
+          Get one at: https://login.tailscale.com/admin/settings/keys
+          
+          Either:
+            1. Enter it when prompted, OR
+            2. Set vault_tailscale_authkey in your vault.yml
+        success_msg: "Tailscale auth key: configured"
+      tags: always
+
+    - name: Validate GitHub username
+      ansible.builtin.assert:
+        that:
+          - github_username is defined
+          - github_username | length > 0
+        fail_msg: |
+          
+          ERROR: GitHub username is required!
+          
+          Either:
+            1. Enter it when prompted, OR
+            2. Set github_username in inventory/group_vars/all/main.yml
+        success_msg: "GitHub username: {{ github_username }}"
+      when: github_fetch_enabled | default(true) | bool
+      tags: always
+
+    - name: Validate GitHub token
+      ansible.builtin.assert:
+        that:
+          - github_token is defined
+          - github_token | length > 0
+        fail_msg: |
+          
+          ERROR: GitHub token is required for repository discovery!
+          
+          Get one at: https://github.com/settings/tokens
+          Required scopes: repo (for private repos)
+          
+          Either:
+            1. Enter it when prompted, OR
+            2. Set vault_github_token in your vault.yml
+        success_msg: "GitHub token: configured"
+      when: github_fetch_enabled | default(true) | bool
+      tags: always
+
+    - name: Validate GitHub SSH key
+      ansible.builtin.assert:
+        that:
+          - github_ssh_key is defined
+          - github_ssh_key | length > 0
+        fail_msg: |
+          
+          ERROR: GitHub SSH key is required for cloning repositories!
+          
+          Generate one with: ssh-keygen -t ed25519 -C "ansible-deploy"
+          Add the public key to: https://github.com/settings/keys
+          
+          Either:
+            1. Enter the path when prompted, OR
+            2. Set vault_github_ssh_key in your vault.yml
+        success_msg: "GitHub SSH key: configured"
+      when: github_fetch_enabled | default(true) | bool
+      tags: always
+
+    - name: Display configuration summary
+      ansible.builtin.debug:
+        msg: |
+          
+          ============================================
+          CONFIGURATION SUMMARY
+          ============================================
+          Target Host: {{ inventory_hostname }}
+          GitHub User: {{ github_username | default('not set') }}
+          Tailscale:   {{ 'configured' if tailscale_authkey | length > 0 else 'not set' }}
+          GitHub Auth: {{ 'configured' if github_token | default('') | length > 0 else 'not set' }}
+          SSH Key:     {{ 'configured' if github_ssh_key | default('') | length > 0 else 'not set' }}
+          Syncthing:   {{ 'password set' if syncthing_gui_password | default('') | length > 0 else 'no password' }}
+          ============================================
+          
       tags: always
 
   roles:
@@ -44,7 +215,7 @@
       tags:
         - github
         - fetch
-      when: github_fetch_enabled | default(false) | bool
+      when: github_fetch_enabled | default(true) | bool
 
     - role: github_repos
       tags:
@@ -65,22 +236,45 @@
         - sync
 
   post_tasks:
-    - name: Display summary
+    - name: Display completion summary
       ansible.builtin.debug:
         msg: |
-          ========================================
-          Configuration Complete for {{ inventory_hostname }}
-          ========================================
-          Tailscale IP: {{ tailscale_ip }}
-          Syncthing Device ID: {{ syncthing_local_device_id | default('N/A') }}
-          Syncthing GUI: http://{{ syncthing_gui_address }}
           
-          Firewall Status: UFW enabled (Tailscale-only access)
-          SSH Access: Via Tailscale only
-          {% if github_repos | length > 0 and github_sync_enabled | default(true) %}
-
-          GitHub Sync: Enabled ({{ github_sync_cron_minute }} {{ github_sync_cron_hour }} {{ github_sync_cron_day }} {{ github_sync_cron_month }} {{ github_sync_cron_weekday }})
+          ========================================
+          SETUP COMPLETE FOR {{ inventory_hostname }}
+          ========================================
+          
+          TAILSCALE
+            IP Address: {{ tailscale_ip | default('N/A') }}
+            Status: Connected
+          
+          SYNCTHING  
+            Device ID: {{ syncthing_local_device_id | default('N/A') }}
+            Web GUI: http://{{ syncthing_gui_address | default('127.0.0.1:8384') }}
+            Username: {{ syncthing_gui_user | default('admin') }}
+          
+          FIREWALL
+            Status: UFW enabled (Tailscale-only access)
+            SSH: Via Tailscale network only
+          
+          {% if github_repos is defined and github_repos | length > 0 %}
+          GITHUB REPOSITORIES
+            Cloned: {{ github_repos | length }} repos
+            Location: {{ github_repos_base_path | default('/opt/repos') }}
+            Auto-sync: {{ 'Every 15 min' if github_sync_enabled | default(true) else 'Disabled' }}
           {% endif %}
-
+          
+          ========================================
+          NEXT STEPS
+          ========================================
+          1. Access Syncthing GUI via Tailscale:
+             http://{{ tailscale_ip | default('TAILSCALE_IP') }}:8384
+          
+          2. Get your local Syncthing device ID and add it to:
+             inventory/group_vars/all/main.yml
+          
+          3. On your local Syncthing, add this server's device:
+             {{ syncthing_local_device_id | default('See above') }}
+          
           ========================================
       tags: always
