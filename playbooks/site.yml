@@ -58,9 +58,10 @@
     # GitHub SSH Key
     - name: prompt_github_ssh_key
       prompt: |
-        Enter path to your GitHub SSH private key file
-        (e.g., ~/.ssh/id_ed25519 or ~/.ssh/github_deploy_key)
-        Leave blank to use vault value
+        Enter the path to your SSH private key ON THE TARGET SYSTEM
+        (e.g., /root/.ssh/id_ed25519 or /home/deploy/.ssh/id_ed25519)
+        This key must already exist on the target and be added to GitHub
+        Leave blank to skip GitHub repo cloning
       private: no
       default: ""
 
@@ -77,14 +78,6 @@
       default: ""
 
   pre_tasks:
-    # Load GitHub SSH key from file if path was provided
-    - name: Read GitHub SSH key from file
-      ansible.builtin.set_fact:
-        _ssh_key_from_file: "{{ lookup('file', prompt_github_ssh_key) }}"
-      when: prompt_github_ssh_key | length > 0
-      delegate_to: localhost
-      become: no
-
     # Set effective values (prompt overrides vault/config)
     - name: Set effective SSH user public key
       ansible.builtin.set_fact:
@@ -98,9 +91,9 @@
       ansible.builtin.set_fact:
         github_token: "{{ prompt_github_token if prompt_github_token | length > 0 else (vault_github_token | default('')) }}"
 
-    - name: Set effective GitHub SSH key
+    - name: Set effective GitHub SSH key path
       ansible.builtin.set_fact:
-        github_ssh_key: "{{ _ssh_key_from_file if _ssh_key_from_file is defined else (vault_github_ssh_key | default('')) }}"
+        github_ssh_key_path: "{{ prompt_github_ssh_key if prompt_github_ssh_key | length > 0 else (github_ssh_key_path | default('')) }}"
 
     - name: Set effective Syncthing password
       ansible.builtin.set_fact:
@@ -159,22 +152,24 @@
       when: github_fetch_enabled | default(true) | bool
       tags: always
 
-    - name: Validate GitHub SSH key
+    - name: Validate GitHub SSH key path
       ansible.builtin.assert:
         that:
-          - github_ssh_key is defined
-          - github_ssh_key | length > 0
+          - github_ssh_key_path is defined
+          - github_ssh_key_path | length > 0
         fail_msg: |
           
-          ERROR: GitHub SSH key is required for cloning repositories!
+          ERROR: GitHub SSH key path is required for cloning repositories!
           
-          Generate one with: ssh-keygen -t ed25519 -C "ansible-deploy"
-          Add the public key to: https://github.com/settings/keys
+          The SSH key must exist on the target system.
+          Example paths:
+            - /root/.ssh/id_ed25519
+            - /home/deploy/.ssh/id_ed25519
           
-          Either:
-            1. Enter the path when prompted, OR
-            2. Set vault_github_ssh_key in your vault.yml
-        success_msg: "GitHub SSH key: configured"
+          Make sure the public key is added to: https://github.com/settings/keys
+          
+          Enter the path when prompted, or set github_ssh_key_path in main.yml
+        success_msg: "GitHub SSH key path: {{ github_ssh_key_path }}"
       when: github_fetch_enabled | default(true) | bool
       tags: always
 
@@ -191,6 +186,7 @@
           SSH Key:     {{ 'configured' if ssh_user_public_key | default('') | length > 0 else 'NOT SET' }}
           GitHub User: {{ github_username | default('not set') }}
           GitHub Auth: {{ 'configured' if github_token | default('') | length > 0 else 'not set' }}
+          GitHub Key:  {{ github_ssh_key_path | default('not set') }}
           Syncthing:   {{ 'password set' if syncthing_gui_password | default('') | length > 0 else 'no password' }}
           ============================================
           

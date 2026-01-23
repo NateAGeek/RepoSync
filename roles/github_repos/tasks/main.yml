@@ -1,36 +1,82 @@
 ---
 # GitHub repos role - deploys SSH key and clones repositories
+#
+# Supports two modes:
+# 1. github_ssh_key_path: Use an existing key on the target system (preferred)
+# 2. github_ssh_key: Copy key content to target system
 
-- name: Ensure .ssh directory exists for repo owner
+- name: Determine SSH key path
+  ansible.builtin.set_fact:
+    _github_ssh_key_path: "{{ github_ssh_key_path | default('') }}"
+    _github_user_home: "{{ (github_repos_owner == 'root') | ternary('/root', '/home/' + github_repos_owner) }}"
+
+# Mode 1: Use existing key path (no copying needed)
+- name: Use existing SSH key path
+  when: _github_ssh_key_path | length > 0
+  block:
+    - name: Verify SSH key exists at specified path
+      ansible.builtin.stat:
+        path: "{{ _github_ssh_key_path }}"
+      register: _ssh_key_stat
+
+    - name: Fail if SSH key not found
+      ansible.builtin.fail:
+        msg: "SSH key not found at {{ _github_ssh_key_path }}"
+      when: not _ssh_key_stat.stat.exists
+
+    - name: Set SSH key path for GitHub
+      ansible.builtin.set_fact:
+        _effective_ssh_key_path: "{{ _github_ssh_key_path }}"
+
+# Mode 2: Copy key content to target (legacy mode)
+- name: Deploy SSH key from content
+  when: _github_ssh_key_path | length == 0 and github_ssh_key is defined and github_ssh_key | length > 0
+  block:
+    - name: Ensure .ssh directory exists for repo owner
+      ansible.builtin.file:
+        path: "{{ _github_user_home }}/.ssh"
+        state: directory
+        owner: "{{ github_repos_owner }}"
+        group: "{{ github_repos_group }}"
+        mode: '0700'
+
+    - name: Deploy GitHub SSH private key
+      ansible.builtin.copy:
+        content: "{{ github_ssh_key }}"
+        dest: "{{ _github_user_home }}/.ssh/{{ github_ssh_key_name }}"
+        owner: "{{ github_repos_owner }}"
+        group: "{{ github_repos_group }}"
+        mode: '0600'
+      no_log: true
+
+    - name: Set SSH key path for GitHub (deployed key)
+      ansible.builtin.set_fact:
+        _effective_ssh_key_path: "{{ _github_user_home }}/.ssh/{{ github_ssh_key_name }}"
+
+# Configure SSH to use the key for GitHub
+- name: Ensure .ssh directory exists
   ansible.builtin.file:
-    path: "{{ (github_repos_owner == 'root') | ternary('/root', '/home/' + github_repos_owner) }}/.ssh"
+    path: "{{ _github_user_home }}/.ssh"
     state: directory
     owner: "{{ github_repos_owner }}"
     group: "{{ github_repos_group }}"
     mode: '0700'
 
-- name: Deploy GitHub SSH private key
-  ansible.builtin.copy:
-    content: "{{ github_ssh_key }}"
-    dest: "{{ (github_repos_owner == 'root') | ternary('/root', '/home/' + github_repos_owner) }}/.ssh/{{ github_ssh_key_name }}"
+- name: Configure SSH for GitHub
+  ansible.builtin.blockinfile:
+    path: "{{ _github_user_home }}/.ssh/config"
+    create: yes
     owner: "{{ github_repos_owner }}"
     group: "{{ github_repos_group }}"
     mode: '0600'
-  no_log: true
-
-- name: Configure SSH for GitHub
-  ansible.builtin.copy:
-    dest: "{{ (github_repos_owner == 'root') | ternary('/root', '/home/' + github_repos_owner) }}/.ssh/config"
-    content: |
+    marker: "# {mark} ANSIBLE MANAGED - GitHub configuration"
+    block: |
       Host github.com
         HostName github.com
         User git
-        IdentityFile {{ (github_repos_owner == 'root') | ternary('/root', '/home/' + github_repos_owner) }}/.ssh/{{ github_ssh_key_name }}
+        IdentityFile {{ _effective_ssh_key_path }}
         IdentitiesOnly yes
         StrictHostKeyChecking accept-new
-    owner: "{{ github_repos_owner }}"
-    group: "{{ github_repos_group }}"
-    mode: '0600'
 
 - name: Ensure parent directories exist for repos
   ansible.builtin.file:

@@ -117,9 +117,10 @@ syncthing_devices: []
 
 # GitHub Repositories Configuration
 # ----------------------------------
-# SSH key should be stored in vault.yml
-github_ssh_key: "{{ vault_github_ssh_key }}"
-github_ssh_key_name: github_deploy_key
+# Path to SSH private key ON THE TARGET SYSTEM for GitHub access
+# The key must already exist and its public key added to GitHub
+# Example: /root/.ssh/id_ed25519 or /home/deploy/.ssh/id_ed25519
+github_ssh_key_path: ""
 
 # User to own the cloned repositories
 github_repos_owner: root

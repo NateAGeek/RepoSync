@@ -1,7 +1,18 @@
 ---
 # Default variables for github_repos role
 
-github_ssh_key_name: github_deploy_key
+# Option 1: Path to existing SSH key on the target system (preferred)
+# Example: /root/.ssh/id_ed25519 or /home/deploy/.ssh/id_ed25519
+github_ssh_key_path: ""
+
+# Option 2: SSH key content to deploy (legacy - used if github_ssh_key_path is empty)
+# The key will be copied to ~/.ssh/{{ github_ssh_key_name }}
+github_ssh_key: ""
+github_ssh_key_name: id_ed25519
+
+# User/group to own cloned repositories
 github_repos_owner: root
 github_repos_group: root
+
+# List of repositories to clone (populated by github_fetch_repos role)
 github_repos: []
