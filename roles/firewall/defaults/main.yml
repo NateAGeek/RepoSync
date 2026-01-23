@@ -1,0 +1,22 @@
+---
+# Firewall Role Defaults
+
+# SSH port (should match ssh role)
+ssh_port: 9438
+
+# Rate limiting for SSH connections (uses UFW limit - 6 connections/30 seconds)
+firewall_ssh_rate_limit: 6
+
+# Optional: Specific IP allowlist for SSH (if empty, allow from anywhere)
+# When set, only these IPs can reach SSH port
+# firewall_ssh_allowed_ips:
+#   - 203.0.113.0/24
+#   - 198.51.100.50/32
+
+# Essential outbound traffic (everything else blocked)
+firewall_outbound_allow:
+  - { port: 53, proto: udp, comment: "DNS" }
+  - { port: 53, proto: tcp, comment: "DNS over TCP" }
+  - { port: 123, proto: udp, comment: "NTP" }
+  - { port: 80, proto: tcp, comment: "HTTP" }
+  - { port: 443, proto: tcp, comment: "HTTPS" }

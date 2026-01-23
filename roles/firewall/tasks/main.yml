@@ -1,47 +1,96 @@
 ---
-# Firewall role - configures UFW to only allow Tailscale traffic
+# Firewall Role - Hardened UFW Configuration
 #
-# Strategy: Allow everything on tailscale0 interface, block all else.
-# This is simpler and more secure than IP-based rules.
+# Strategy:
+# - Default DENY incoming
+# - Default DENY outgoing (whitelist essential services)
+# - SSH allowed with rate limiting
+# - Loopback allowed
+# - No ping responses (anti-scanning)
 
-- name: Ensure UFW is installed
+- name: Install UFW
   ansible.builtin.apt:
     name: ufw
     state: present
 
+# Reset UFW to clean state
+- name: Reset UFW to defaults
+  community.general.ufw:
+    state: reset
+
+# Configure UFW defaults - DENY everything
 - name: Set UFW default policy - deny incoming
   community.general.ufw:
     direction: incoming
     policy: deny
 
-- name: Set UFW default policy - allow outgoing
+- name: Set UFW default policy - deny outgoing
   community.general.ufw:
     direction: outgoing
-    policy: allow
+    policy: deny
 
-- name: Allow all traffic on Tailscale interface
+# Allow loopback interface
+- name: Allow all traffic on loopback interface (in)
   community.general.ufw:
     rule: allow
-    interface: tailscale0
+    interface: lo
     direction: in
-    comment: "Allow all Tailscale VPN traffic"
+    comment: "Loopback in"
 
-# Optional: Allow additional ports on non-Tailscale interfaces
-# (e.g., if you need a public web server)
-- name: Allow additional ports from any source
+- name: Allow all traffic on loopback interface (out)
   community.general.ufw:
     rule: allow
+    interface: lo
+    direction: out
+    comment: "Loopback out"
+
+# Deploy custom before.rules for established connections and security hardening
+- name: Deploy UFW before.rules
+  ansible.builtin.template:
+    src: before.rules.j2
+    dest: /etc/ufw/before.rules
+    owner: root
+    group: root
+    mode: '0640'
+    backup: yes
+  notify: Reload UFW
+
+# Allow essential outbound traffic
+- name: Allow essential outbound traffic
+  community.general.ufw:
+    rule: allow
+    direction: out
     port: "{{ item.port | string }}"
     proto: "{{ item.proto }}"
-    comment: "{{ item.comment | default('Custom allowed port') }}"
-  loop: "{{ firewall_public_ports | default([]) }}"
-  when: firewall_public_ports is defined and firewall_public_ports | length > 0
+    comment: "{{ item.comment }}"
+  loop: "{{ firewall_outbound_allow }}"
 
+# SSH from specific IPs only (if allowlist is defined)
+- name: Allow SSH from specific IPs only
+  community.general.ufw:
+    rule: limit
+    port: "{{ ssh_port | string }}"
+    proto: tcp
+    from_ip: "{{ item }}"
+    comment: "SSH from {{ item }}"
+  loop: "{{ firewall_ssh_allowed_ips }}"
+  when: firewall_ssh_allowed_ips is defined and firewall_ssh_allowed_ips | length > 0
+
+# SSH with rate limiting from anywhere (if no allowlist)
+- name: Allow SSH with rate limiting (from anywhere)
+  community.general.ufw:
+    rule: limit
+    port: "{{ ssh_port | string }}"
+    proto: tcp
+    comment: "SSH rate-limited"
+  when: firewall_ssh_allowed_ips is not defined or firewall_ssh_allowed_ips | length == 0
+
+# Enable UFW
 - name: Enable UFW
   community.general.ufw:
     state: enabled
 
-- name: Ensure UFW is running
+- name: Ensure UFW is running and enabled at boot
   ansible.builtin.systemd:
     name: ufw
     enabled: yes

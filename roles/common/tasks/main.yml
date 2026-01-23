@@ -17,6 +17,7 @@
       - git
       - python3-pip
       - ufw
+      - sudo
     state: present
 
 - name: Ensure system timezone is set

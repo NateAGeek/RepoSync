@@ -1,0 +1,33 @@
+---
+# SSHGuard Role
+# Protects against brute-force attacks by monitoring auth logs
+# and dynamically blocking offending IPs via UFW
+
+- name: Install sshguard
+  ansible.builtin.apt:
+    name: sshguard
+    state: present
+
+- name: Deploy sshguard configuration
+  ansible.builtin.template:
+    src: sshguard.conf.j2
+    dest: /etc/sshguard/sshguard.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart sshguard
+
+- name: Deploy sshguard whitelist
+  ansible.builtin.template:
+    src: whitelist.j2
+    dest: /etc/sshguard/whitelist
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart sshguard
+
+- name: Ensure sshguard is enabled and running
+  ansible.builtin.systemd:
+    name: sshguard
+    enabled: yes
+    state: started

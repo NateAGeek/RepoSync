@@ -1,0 +1,102 @@
+---
+# SSH Hardening Role
+# - Creates dedicated SSH user (no root access)
+# - ed25519 keys only
+# - No passwords, no PAM, no keyboard-interactive
+# - Modern ciphers only
+# - Anti-scanning/brute-force settings
+
+# ============================================
+# SSH USER SETUP
+# ============================================
+
+- name: Create SSH user group
+  ansible.builtin.group:
+    name: "{{ ssh_user }}"
+    state: present
+
+- name: Create SSH user
+  ansible.builtin.user:
+    name: "{{ ssh_user }}"
+    group: "{{ ssh_user }}"
+    groups: "{{ ssh_user_groups }}"
+    shell: "{{ ssh_user_shell }}"
+    create_home: yes
+    state: present
+
+- name: Ensure .ssh directory exists for SSH user
+  ansible.builtin.file:
+    path: "/home/{{ ssh_user }}/.ssh"
+    state: directory
+    owner: "{{ ssh_user }}"
+    group: "{{ ssh_user }}"
+    mode: '0700'
+
+- name: Deploy SSH public key for user
+  ansible.builtin.authorized_key:
+    user: "{{ ssh_user }}"
+    key: "{{ ssh_user_public_key }}"
+    state: present
+    exclusive: yes
+  when: ssh_user_public_key is defined and ssh_user_public_key | length > 0
+
+- name: Configure passwordless sudo for SSH user
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers.d/{{ ssh_user }}
+    line: "{{ ssh_user }} ALL=(ALL) NOPASSWD:ALL"
+    create: yes
+    mode: '0440'
+    validate: 'visudo -cf %s'
+
+# ============================================
+# SSH DAEMON HARDENING
+# ============================================
+
+- name: Ensure OpenSSH server is installed
+  ansible.builtin.apt:
+    name: openssh-server
+    state: present
+
+- name: Generate ed25519 host key if missing
+  ansible.builtin.command: ssh-keygen -t ed25519 -f /etc/ssh/ssh_host_ed25519_key -N ''
+  args:
+    creates: /etc/ssh/ssh_host_ed25519_key
+
+- name: Set correct permissions on ed25519 host key
+  ansible.builtin.file:
+    path: /etc/ssh/ssh_host_ed25519_key
+    mode: '0600'
+    owner: root
+    group: root
+
+- name: Remove weak host keys (RSA, DSA, ECDSA)
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/ssh/ssh_host_rsa_key
+    - /etc/ssh/ssh_host_rsa_key.pub
+    - /etc/ssh/ssh_host_dsa_key
+    - /etc/ssh/ssh_host_dsa_key.pub
+    - /etc/ssh/ssh_host_ecdsa_key
+    - /etc/ssh/ssh_host_ecdsa_key.pub
+  notify:
+    - Validate sshd config
+    - Restart sshd
+
+- name: Deploy hardened sshd_config
+  ansible.builtin.template:
+    src: sshd_config.j2
+    dest: /etc/ssh/sshd_config
+    owner: root
+    group: root
+    mode: '0644'
+    validate: 'sshd -t -f %s'
+  notify:
+    - Restart sshd
+
+- name: Ensure sshd is enabled and running
+  ansible.builtin.systemd:
+    name: sshd
+    enabled: yes
+    state: started

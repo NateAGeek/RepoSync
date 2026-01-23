@@ -1,0 +1,79 @@
+#
+# {{ ansible_managed }}
+# UFW before.rules - Custom rules processed before standard rules
+#
+# Rules are evaluated in order:
+# 1. before.rules (this file)
+# 2. user rules (ufw allow/deny commands)
+# 3. after.rules
+#
+
+*filter
+:ufw-before-input - [0:0]
+:ufw-before-output - [0:0]
+:ufw-before-forward - [0:0]
+:ufw-not-local - [0:0]
+
+# ============================================
+# ESTABLISHED/RELATED - Allow existing connections
+# ============================================
+# Critical - without this, outbound connections can't receive responses
+
+-A ufw-before-input -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A ufw-before-output -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A ufw-before-forward -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+
+# ============================================
+# LOOPBACK - Allow all local traffic
+# ============================================
+-A ufw-before-input -i lo -j ACCEPT
+-A ufw-before-output -o lo -j ACCEPT
+
+# Drop traffic to loopback from non-loopback interface (spoofing protection)
+-A ufw-before-input -d 127.0.0.0/8 ! -i lo -j DROP
+
+# ============================================
+# ICMP - Minimal allowed types
+# ============================================
+# Echo reply (responses to our pings)
+-A ufw-before-input -p icmp --icmp-type echo-reply -j ACCEPT
+
+# Destination unreachable (needed for path MTU discovery)
+-A ufw-before-input -p icmp --icmp-type destination-unreachable -j ACCEPT
+
+# Time exceeded (traceroute diagnostics)
+-A ufw-before-input -p icmp --icmp-type time-exceeded -j ACCEPT
+
+# NO echo-request (ping) - reduces port scanning feedback
+# Uncomment below to allow ping:
+# -A ufw-before-input -p icmp --icmp-type echo-request -j ACCEPT
+
+# Allow outbound ICMP
+-A ufw-before-output -p icmp -j ACCEPT
+
+# ============================================
+# INVALID PACKETS - Drop silently
+# ============================================
+-A ufw-before-input -m conntrack --ctstate INVALID -j DROP
+-A ufw-before-output -m conntrack --ctstate INVALID -j DROP
+
+# ============================================
+# BROADCAST/MULTICAST - Accept for DHCP
+# ============================================
+-A ufw-before-input -m addrtype --dst-type BROADCAST -j ACCEPT
+-A ufw-before-input -m addrtype --dst-type MULTICAST -j ACCEPT
+
+# ============================================
+# ANTI-SPOOFING
+# ============================================
+-A ufw-before-input -j ufw-not-local
+
+-A ufw-not-local -m addrtype --dst-type LOCAL -j RETURN
+-A ufw-not-local -m addrtype --dst-type MULTICAST -j RETURN
+-A ufw-not-local -m addrtype --dst-type BROADCAST -j RETURN
+
+# Log and drop spoofed packets
+-A ufw-not-local -m limit --limit 3/min --limit-burst 10 -j LOG --log-prefix "[UFW SPOOF] "
+-A ufw-not-local -j DROP
+
+COMMIT

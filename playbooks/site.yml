@@ -13,7 +13,7 @@
 #   ansible-playbook playbooks/site.yml --tags "syncthing,github"
 #
 # Skip roles:
-#   ansible-playbook playbooks/site.yml --skip-tags "tailscale,firewall"
+#   ansible-playbook playbooks/site.yml --skip-tags "ssh,firewall"
 
 - name: Configure infrastructure
   hosts: all
@@ -21,17 +21,17 @@
   gather_facts: true
 
   vars_prompt:
-    # Tailscale Auth Key
-    - name: prompt_tailscale_authkey
+    # SSH Public Key
+    - name: prompt_ssh_public_key
       prompt: |
 
         ============================================
-        TAILSCALE SETUP
+        SSH ACCESS SETUP
         ============================================
-        Enter your Tailscale Auth Key
-        (Get one at https://login.tailscale.com/admin/settings/keys)
+        Enter your SSH public key (ed25519)
+        (e.g., ssh-ed25519 AAAA... user@host)
         Leave blank to use vault value
-      private: yes
+      private: no
       default: ""
 
     # GitHub Username
@@ -77,8 +77,8 @@
       default: ""
 
   pre_tasks:
-    # Load SSH key from file if path was provided
-    - name: Read SSH key from file
+    # Load GitHub SSH key from file if path was provided
+    - name: Read GitHub SSH key from file
       ansible.builtin.set_fact:
         _ssh_key_from_file: "{{ lookup('file', prompt_github_ssh_key) }}"
       when: prompt_github_ssh_key | length > 0
@@ -86,9 +86,9 @@
       become: no
 
     # Set effective values (prompt overrides vault/config)
-    - name: Set effective Tailscale auth key
+    - name: Set effective SSH user public key
       ansible.builtin.set_fact:
-        tailscale_authkey: "{{ prompt_tailscale_authkey if prompt_tailscale_authkey | length > 0 else (vault_tailscale_authkey | default('')) }}"
+        ssh_user_public_key: "{{ prompt_ssh_public_key if prompt_ssh_public_key | length > 0 else (vault_ssh_user_public_key | default('')) }}"
 
     - name: Set effective GitHub username
       ansible.builtin.set_fact:
@@ -107,21 +107,21 @@
         syncthing_gui_password: "{{ prompt_syncthing_password if prompt_syncthing_password | length > 0 else (vault_syncthing_gui_password | default('')) }}"
 
     # Validate required variables
-    - name: Validate Tailscale auth key
+    - name: Validate SSH user public key
       ansible.builtin.assert:
         that:
-          - tailscale_authkey is defined
-          - tailscale_authkey | length > 0
+          - ssh_user_public_key is defined
+          - ssh_user_public_key | length > 0
         fail_msg: |
           
-          ERROR: Tailscale auth key is required!
+          ERROR: SSH public key is required!
           
-          Get one at: https://login.tailscale.com/admin/settings/keys
+          Generate one with: ssh-keygen -t ed25519 -C "your-email"
           
           Either:
             1. Enter it when prompted, OR
-            2. Set vault_tailscale_authkey in your vault.yml
-        success_msg: "Tailscale auth key: configured"
+            2. Set vault_ssh_user_public_key in your vault.yml
+        success_msg: "SSH public key: configured"
       tags: always
 
     - name: Validate GitHub username
@@ -186,10 +186,11 @@
           CONFIGURATION SUMMARY
           ============================================
           Target Host: {{ inventory_hostname }}
+          SSH User:    {{ ssh_user | default('deploy') }}
+          SSH Port:    {{ ssh_port | default(9438) }}
+          SSH Key:     {{ 'configured' if ssh_user_public_key | default('') | length > 0 else 'NOT SET' }}
           GitHub User: {{ github_username | default('not set') }}
-          Tailscale:   {{ 'configured' if tailscale_authkey | length > 0 else 'not set' }}
           GitHub Auth: {{ 'configured' if github_token | default('') | length > 0 else 'not set' }}
-          SSH Key:     {{ 'configured' if github_ssh_key | default('') | length > 0 else 'not set' }}
           Syncthing:   {{ 'password set' if syncthing_gui_password | default('') | length > 0 else 'no password' }}
           ============================================
           
@@ -201,10 +202,15 @@
         - common
         - base
 
-    - role: tailscale
+    - role: sshguard
       tags:
-        - tailscale
-        - vpn
+        - sshguard
+        - security
+
+    - role: ssh
+      tags:
+        - ssh
+        - security
 
     - role: firewall
       tags:
@@ -244,18 +250,22 @@
           SETUP COMPLETE FOR {{ inventory_hostname }}
           ========================================
           
-          TAILSCALE
-            IP Address: {{ tailscale_ip | default('N/A') }}
-            Status: Connected
+          SSH ACCESS
+            User: {{ ssh_user | default('deploy') }}
+            Port: {{ ssh_port | default(9438) }}
+            Auth: ed25519 keys only (no passwords)
+            Root: disabled
+            Protection: SSHGuard active (blocks after failed attempts)
+          
+          FIREWALL
+            Inbound: DENY (except SSH {{ ssh_port | default(9438) }}/tcp)
+            Outbound: DENY (except DNS, NTP, HTTP, HTTPS)
+            Rate limit: Active on SSH port
           
           SYNCTHING  
             Device ID: {{ syncthing_local_device_id | default('N/A') }}
-            Web GUI: http://{{ syncthing_gui_address | default('127.0.0.1:8384') }}
+            Web GUI: http://127.0.0.1:8384 (via SSH tunnel)
             Username: {{ syncthing_gui_user | default('admin') }}
-          
-          FIREWALL
-            Status: UFW enabled (Tailscale-only access)
-            SSH: Via Tailscale network only
           
           {% if github_repos is defined and github_repos | length > 0 %}
           GITHUB REPOSITORIES
@@ -265,16 +275,15 @@
           {% endif %}
           
           ========================================
-          NEXT STEPS
+          CONNECT TO YOUR SERVER
           ========================================
-          1. Access Syncthing GUI via Tailscale:
-             http://{{ tailscale_ip | default('TAILSCALE_IP') }}:8384
           
-          2. Get your local Syncthing device ID and add it to:
-             inventory/group_vars/all/main.yml
+          SSH access:
+            ssh -p {{ ssh_port | default(9438) }} {{ ssh_user | default('deploy') }}@{{ inventory_hostname }}
           
-          3. On your local Syncthing, add this server's device:
-             {{ syncthing_local_device_id | default('See above') }}
+          Syncthing GUI (via SSH tunnel):
+            ssh -L 8384:localhost:8384 -p {{ ssh_port | default(9438) }} {{ ssh_user | default('deploy') }}@{{ inventory_hostname }}
+            Then open: http://localhost:8384
           
           ========================================
       tags: always

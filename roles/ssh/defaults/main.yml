@@ -1,0 +1,53 @@
+---
+# SSH Hardening Role Defaults
+# These can be overridden in group_vars or host_vars
+
+# SSH daemon port
+ssh_port: 9438
+
+# SSH user configuration
+ssh_user: deploy
+ssh_user_groups:
+  - sudo
+ssh_user_shell: /bin/bash
+
+# SSH public key for the user (REQUIRED - set in group_vars or vault)
+# ssh_user_public_key: "ssh-ed25519 AAAA... user@host"
+
+# Host key algorithms (ed25519 only)
+ssh_host_key_algorithms:
+  - ssh-ed25519
+
+# Accepted public key types for authentication
+ssh_pubkey_accepted_types:
+  - ssh-ed25519
+
+# Encryption ciphers (modern, secure only)
+ssh_ciphers:
+  - chacha20-poly1305@openssh.com
+  - aes256-gcm@openssh.com
+  - aes128-gcm@openssh.com
+
+# Key exchange algorithms
+ssh_kex_algorithms:
+  - sntrup761x25519-sha512@openssh.com
+  - curve25519-sha256
+  - curve25519-sha256@libssh.org
+
+# Message authentication codes
+ssh_macs:
+  - hmac-sha2-512-etm@openssh.com
+  - hmac-sha2-256-etm@openssh.com
+
+# Anti-brute-force / Anti-scanning settings
+ssh_max_auth_tries: 3
+ssh_login_grace_time: 20
+ssh_max_sessions: 3
+ssh_max_startups: "2:50:10"
+
+# Allow TCP forwarding (needed for Syncthing tunnel access)
+ssh_allow_tcp_forwarding: yes
+
+# Allow only specific users to SSH (set to ssh_user by default)
+ssh_allow_users:
+  - "{{ ssh_user }}"

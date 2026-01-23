@@ -1,0 +1,31 @@
+# {{ ansible_managed }}
+# SSHGuard Configuration
+# See: https://www.sshguard.net/docs/
+
+# Backend for blocking (ufw for Ubuntu/Debian with UFW)
+BACKEND="/usr/libexec/sshguard/sshguard-firewall"
+
+# Log files to monitor for attacks
+FILES="/var/log/auth.log"
+
+# Threshold score that triggers a block
+# Each attack attempt adds points. Default attack = 10 points.
+# So THRESHOLD=30 means ~3 failed attempts triggers a block.
+THRESHOLD={{ sshguard_threshold }}
+
+# Initial block time in seconds
+# Doubles with each subsequent offense from the same IP
+BLOCK_TIME={{ sshguard_block_time }}
+
+# Detection window in seconds
+# Attacks older than this are forgotten
+DETECTION_TIME={{ sshguard_detection_time }}
+
+# Whitelist file (IPs that should never be blocked)
+WHITELIST_FILE=/etc/sshguard/whitelist
+
+# IPv6 subnet size to block (default: 128 = single address)
+IPV6_SUBNET=128
+
+# IPv4 subnet size to block (default: 32 = single address)
+IPV4_SUBNET=32

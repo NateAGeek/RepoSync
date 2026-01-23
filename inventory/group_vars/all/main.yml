@@ -3,14 +3,87 @@
 # Global Variables
 # ============================================
 
-# Tailscale Configuration
-# -----------------------
-# Auth key should be stored in vault.yml
-tailscale_authkey: "{{ vault_tailscale_authkey }}"
-# Set to true to accept routes advertised by other nodes
-tailscale_accept_routes: false
-# Set to true to advertise this node as an exit node
-tailscale_exit_node: false
+# SSH User Configuration
+# ----------------------
+# Dedicated user for SSH access (root login is disabled)
+ssh_user: deploy
+ssh_user_groups:
+  - sudo
+ssh_user_shell: /bin/bash
+
+# SSH public key for authentication (REQUIRED)
+# Set this to your ed25519 public key, or use vault
+# Example: ssh_user_public_key: "ssh-ed25519 AAAA... user@host"
+ssh_user_public_key: "{{ vault_ssh_user_public_key | default('') }}"
+
+# SSH Hardening Configuration
+# ---------------------------
+# Port for SSH daemon (non-standard for security)
+ssh_port: 9438
+
+# Allowed SSH key types (ed25519 only - most secure)
+ssh_host_key_algorithms:
+  - ssh-ed25519
+ssh_pubkey_accepted_types:
+  - ssh-ed25519
+
+# Modern ciphers only (no weak algorithms)
+ssh_ciphers:
+  - chacha20-poly1305@openssh.com
+  - aes256-gcm@openssh.com
+  - aes128-gcm@openssh.com
+
+# Key exchange algorithms
+ssh_kex_algorithms:
+  - sntrup761x25519-sha512@openssh.com
+  - curve25519-sha256
+  - curve25519-sha256@libssh.org
+
+# MACs (message authentication codes)
+ssh_macs:
+  - hmac-sha2-512-etm@openssh.com
+  - hmac-sha2-256-etm@openssh.com
+
+# Anti-brute-force settings
+ssh_max_auth_tries: 3
+ssh_login_grace_time: 20
+ssh_max_sessions: 3
+ssh_max_startups: "2:50:10"
+
+# SSHGuard Configuration
+# ----------------------
+# Threshold score to trigger a block (lower = more aggressive)
+# Each failed login attempt = 10 points
+sshguard_threshold: 30
+
+# Initial block duration in seconds
+sshguard_block_time: 120
+
+# Detection window in seconds
+sshguard_detection_time: 1800
+
+# Whitelist IPs that should never be blocked
+sshguard_whitelist:
+  - 127.0.0.0/8
+  - ::1/128
+  # Add your admin IPs here:
+  # - 203.0.113.50/32
+
+# Firewall Configuration
+# ----------------------
+# Optional: Specific IP allowlist for SSH
+# If empty, SSH is allowed from anywhere (with rate limiting)
+# firewall_ssh_allowed_ips:
+#   - 203.0.113.0/24
+#   - 198.51.100.50/32
+
+# Essential outbound traffic (everything else blocked)
+firewall_outbound_allow:
+  - { port: 53, proto: udp, comment: "DNS" }
+  - { port: 53, proto: tcp, comment: "DNS over TCP" }
+  - { port: 123, proto: udp, comment: "NTP time sync" }
+  - { port: 80, proto: tcp, comment: "HTTP (apt updates)" }
+  - { port: 443, proto: tcp, comment: "HTTPS (apt updates, GitHub)" }
 
 # Syncthing Configuration
 # -----------------------
@@ -19,15 +92,12 @@ syncthing_group: syncthing
 syncthing_home: /home/syncthing
 syncthing_config_dir: "{{ syncthing_home }}/.config/syncthing"
 
-# GUI settings - bind to Tailscale IP for security
-# Override per-host with tailscale_ip variable
-syncthing_gui_address: "{{ tailscale_ip | default('127.0.0.1') }}:8384"
+# GUI settings - bind to localhost only (access via SSH tunnel)
+syncthing_gui_address: "127.0.0.1:8384"
 syncthing_gui_user: admin
 syncthing_gui_password: "{{ vault_syncthing_gui_password | default('') }}"
 
 # Syncthing folders to sync
-# The github-repos folder syncs all cloned repositories
-# Add your device names to the 'devices' list after configuring syncthing_devices below
 syncthing_folders:
   - id: github-repos
     label: GitHub Repos
@@ -36,30 +106,11 @@ syncthing_folders:
     rescan_interval: 3600
     devices: []  # Add your device names here, e.g.: [my-laptop, my-desktop]
 
-# Example for additional folders:
-# syncthing_folders:
-#   - id: github-repos
-#     label: GitHub Repos
-#     path: "{{ github_repos_base_path }}"
-#     type: sendreceive
-#     devices:
-#       - my-laptop
-#   - id: documents
-#     label: Documents
-#     path: "{{ syncthing_home }}/Documents"
-#     devices:
-#       - my-laptop
-
 # Syncthing devices to connect with
 # Example:
 # syncthing_devices:
 #   - id: XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX-XXXXXXX
 #     name: device1
-#     addresses:
-#       - dynamic
-#       - tcp://100.64.0.5:22000
-#   - id: YYYYYYY-YYYYYYY-YYYYYYY-YYYYYYY-YYYYYYY-YYYYYYY-YYYYYYY-YYYYYYY
-#     name: device2
 #     addresses:
 #       - dynamic
 syncthing_devices: []
@@ -76,68 +127,34 @@ github_repos_group: root
 
 # GitHub Auto-Fetch Configuration
 # --------------------------------
-# Automatically discover and clone all your GitHub repositories
-# Requires a GitHub Personal Access Token (PAT) with 'repo' scope
-
-# Enable automatic repository discovery from GitHub API
 github_fetch_enabled: true
 
-# Your GitHub username (REQUIRED - set this to your username)
+# Your GitHub username (REQUIRED)
 github_username: ""
 
 # GitHub Personal Access Token (from vault)
 github_token: "{{ vault_github_token }}"
 
 # Base path where repositories will be cloned
-# Repos will be cloned to: {{ github_repos_base_path }}/{{ owner }}/{{ repo_name }}
 github_repos_base_path: /opt/repos
 
 # Filter options
-github_fetch_exclude_forks: true      # Skip forked repositories
-github_fetch_exclude_archived: true   # Skip archived repositories
+github_fetch_exclude_forks: true
+github_fetch_exclude_archived: true
 
-# Manual repository list (used if github_fetch_enabled is false)
-# Or merged with auto-fetched repos if you want to add extras
-# Example:
-# github_repos_extra:
-#   - repo: git@github.com:other-org/some-repo.git
-#     dest: /opt/repos/other-org/some-repo
-#     version: main
+# Manual repository list
 github_repos_extra: []
 
-# This will be populated dynamically by github_fetch_repos role
-# Or set manually if github_fetch_enabled is false
+# Populated dynamically by github_fetch_repos role
 github_repos: []
 
 # GitHub Sync (Cron) Configuration
 # ---------------------------------
-# Periodically pulls new commits from remote. Safe mode only:
-#   - Only fast-forward pulls (no merge commits)
-#   - Skips repos with local changes (uncommitted or unpushed)
-#   - Never modifies, commits, or forces anything
-
 github_sync_enabled: true
 
 # Cron schedule (default: every 15 minutes)
-# Format: minute hour day month weekday
 github_sync_cron_minute: "*/15"
 github_sync_cron_hour: "*"
 github_sync_cron_day: "*"
 github_sync_cron_month: "*"
 github_sync_cron_weekday: "*"
-
-# Optional: Slack notifications on sync failure
-# github_sync_notify_on_failure: true
-# github_sync_slack_webhook: "https://hooks.slack.com/services/XXX/YYY/ZZZ"
-
-# Firewall Configuration
-# ----------------------
-# Strategy: All traffic on tailscale0 interface is allowed.
-#           Everything else is blocked by default.
-#
-# If you need to expose ports publicly (outside Tailscale), add them here:
-# Example:
-# firewall_public_ports:
-#   - { port: 80, proto: tcp, comment: "HTTP" }
-#   - { port: 443, proto: tcp, comment: "HTTPS" }
-firewall_public_ports: []

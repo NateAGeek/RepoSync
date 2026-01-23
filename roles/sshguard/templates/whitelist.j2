@@ -1,0 +1,7 @@
+# {{ ansible_managed }}
+# SSHGuard Whitelist
+# IPs and networks listed here will never be blocked
+
+{% for ip in sshguard_whitelist %}
+{{ ip }}
+{% endfor %}

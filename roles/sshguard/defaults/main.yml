@@ -1,0 +1,17 @@
+---
+# SSHGuard Role Defaults
+
+# Threshold score to trigger a block
+# Each failed attempt = 10 points, so 30 = ~3 attempts
+sshguard_threshold: 30
+
+# Initial block duration in seconds (doubles on repeat offense)
+sshguard_block_time: 120
+
+# Detection window in seconds (offenses older than this are forgotten)
+sshguard_detection_time: 1800
+
+# IPs/networks that should never be blocked
+sshguard_whitelist:
+  - 127.0.0.0/8
+  - ::1/128
