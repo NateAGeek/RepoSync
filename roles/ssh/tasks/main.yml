@@ -57,6 +57,15 @@
     name: openssh-server
     state: present
 
+# Detect SSH service name (sshd on RHEL/CentOS, ssh on Debian/Ubuntu)
+- name: Detect SSH service name
+  ansible.builtin.set_fact:
+    ssh_service_name: "{{ 'ssh' if ansible_os_family | default('Debian') == 'Debian' else 'sshd' }}"
+
+- name: Debug SSH service name
+  ansible.builtin.debug:
+    msg: "Using SSH service name: {{ ssh_service_name }} (OS family: {{ ansible_os_family | default('unknown') }})"
+
 - name: Generate ed25519 host key if missing
   ansible.builtin.command: ssh-keygen -t ed25519 -f /etc/ssh/ssh_host_ed25519_key -N ''
   args:
@@ -95,8 +104,8 @@
   notify:
     - Restart sshd
 
-- name: Ensure sshd is enabled and running
+- name: Ensure ssh is enabled and running
   ansible.builtin.systemd:
-    name: sshd
+    name: "{{ ssh_service_name | default('ssh') }}"
     enabled: yes
     state: started

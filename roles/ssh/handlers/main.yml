@@ -5,5 +5,5 @@
 
 - name: Restart sshd
   ansible.builtin.systemd:
-    name: sshd
+    name: "{{ ssh_service_name | default('ssh') }}"
     state: restarted
