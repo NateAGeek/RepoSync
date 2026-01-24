@@ -79,6 +79,7 @@ sshguard_whitelist:
 
 # Essential outbound traffic (everything else blocked)
 firewall_outbound_allow:
+  - { port: 22, proto: tcp, comment: "SSH (GitHub clone/pull)" }
   - { port: 53, proto: udp, comment: "DNS" }
   - { port: 53, proto: tcp, comment: "DNS over TCP" }
   - { port: 123, proto: udp, comment: "NTP time sync" }
