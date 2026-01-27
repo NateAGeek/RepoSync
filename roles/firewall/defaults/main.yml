@@ -15,6 +15,7 @@ firewall_ssh_rate_limit: 6
 
 # Essential outbound traffic (everything else blocked)
 firewall_outbound_allow:
+  - { port: 22, proto: tcp, comment: "SSH (GitHub cloning)" }
   - { port: 53, proto: udp, comment: "DNS" }
   - { port: 53, proto: tcp, comment: "DNS over TCP" }
   - { port: 123, proto: udp, comment: "NTP" }

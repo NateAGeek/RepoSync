@@ -76,6 +76,20 @@
   loop: "{{ firewall_ssh_allowed_ips }}"
   when: firewall_ssh_allowed_ips is defined and firewall_ssh_allowed_ips | length > 0
 
+# SSH on port 22 from specific IPs (fallback, if allowlist is defined)
+- name: Allow SSH on port 22 from specific IPs (fallback)
+  community.general.ufw:
+    rule: limit
+    port: "22"
+    proto: tcp
+    from_ip: "{{ item }}"
+    comment: "SSH port 22 from {{ item }}"
+  loop: "{{ firewall_ssh_allowed_ips }}"
+  when:
+    - firewall_ssh_allowed_ips is defined and firewall_ssh_allowed_ips | length > 0
+    - ssh_keep_port_22 | default(false)
+    - ssh_port != 22
+
 # SSH with rate limiting from anywhere (if no allowlist)
 - name: Allow SSH with rate limiting (from anywhere)
   community.general.ufw:
@@ -84,6 +98,18 @@
     proto: tcp
     comment: "SSH rate-limited"
   when: firewall_ssh_allowed_ips is not defined or firewall_ssh_allowed_ips | length == 0
+
+# Also allow port 22 if ssh_keep_port_22 is enabled (fallback during testing)
+- name: Allow SSH on port 22 (fallback)
+  community.general.ufw:
+    rule: limit
+    port: "22"
+    proto: tcp
+    comment: "SSH port 22 fallback"
+  when:
+    - firewall_ssh_allowed_ips is not defined or firewall_ssh_allowed_ips | length == 0
+    - ssh_keep_port_22 | default(false)
+    - ssh_port != 22
 
 # Enable UFW
 - name: Enable UFW
