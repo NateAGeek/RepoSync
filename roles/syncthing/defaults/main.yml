@@ -6,5 +6,24 @@ syncthing_group: syncthing
 syncthing_home: /home/syncthing
 syncthing_config_dir: "{{ syncthing_home }}/.config/syncthing"
 syncthing_gui_address: "127.0.0.1:8384"
-syncthing_folders: []
+syncthing_gui_user: admin
+
+# Remote devices to sync with (populated from vault)
+# Format: [{"name": "windows-pc", "id": "XXXX-XXXX-..."}, ...]
 syncthing_devices: []
+
+# Folders to sync
+# The github-repos folder is auto-configured if github_repos_base_path is set
+syncthing_folders: []
+
+# Auto-configure repos folder for syncing
+syncthing_sync_repos: true
+syncthing_repos_folder_id: "github-repos"
+syncthing_repos_folder_label: "GitHub Repos"
+
+# Direct connection port (optional - for faster sync without relay)
+# Set to 0 to use random port, or specific port like 22000
+syncthing_listen_port: 22000
+
+# Enable direct connections in firewall
+syncthing_enable_direct_port: false

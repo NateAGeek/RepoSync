@@ -85,7 +85,7 @@
 
     - name: Set effective GitHub username
       ansible.builtin.set_fact:
-        github_username: "{{ prompt_github_username if prompt_github_username | length > 0 else (github_username | default('')) }}"
+        github_username: "{{ prompt_github_username if prompt_github_username | length > 0 else (vault_github_username | default(github_username | default(''))) }}"
 
     - name: Set effective GitHub token
       ansible.builtin.set_fact:
@@ -93,11 +93,15 @@
 
     - name: Set effective GitHub SSH key path
       ansible.builtin.set_fact:
-        github_ssh_key_path: "{{ prompt_github_ssh_key if prompt_github_ssh_key | length > 0 else (github_ssh_key_path | default('')) }}"
+        github_ssh_key_path: "{{ prompt_github_ssh_key if prompt_github_ssh_key | length > 0 else (vault_github_ssh_key_path | default(github_ssh_key_path | default(''))) }}"
 
     - name: Set effective Syncthing password
       ansible.builtin.set_fact:
         syncthing_gui_password: "{{ prompt_syncthing_password if prompt_syncthing_password | length > 0 else (vault_syncthing_gui_password | default('')) }}"
+
+    - name: Set effective Syncthing devices
+      ansible.builtin.set_fact:
+        syncthing_devices: "{{ vault_syncthing_devices | default(syncthing_devices | default([])) }}"
 
     # Validate required variables
     - name: Validate SSH user public key

@@ -130,6 +130,18 @@
 # NOW it's safe to enable UFW
 # ============================================
 
+# Syncthing direct port (optional - for faster sync without relay)
+- name: Allow Syncthing direct connections
+  community.general.ufw:
+    rule: allow
+    direction: in
+    port: "{{ syncthing_listen_port | string }}"
+    proto: tcp
+    comment: "Syncthing direct"
+  when:
+    - syncthing_enable_direct_port | default(false)
+    - syncthing_listen_port | default(0) | int > 0
+
 # Enable UFW - SSH rules are already in place
 - name: Enable UFW
   community.general.ufw:

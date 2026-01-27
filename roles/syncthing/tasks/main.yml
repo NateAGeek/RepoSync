@@ -64,7 +64,45 @@
 
 - name: Display local Syncthing device ID
   ansible.builtin.debug:
-    msg: "Syncthing Device ID for {{ inventory_hostname }}: {{ syncthing_local_device_id }}"
+    msg: |
+      ============================================
+      SYNCTHING DEVICE ID (save this!)
+      ============================================
+      {{ syncthing_local_device_id }}
+      ============================================
+      
+      Add this device ID to your other Syncthing devices
+      (Windows, Mac, etc.) to enable sync.
+
+# Build the folders list - auto-add repos folder if configured
+- name: Build syncthing folders list
+  ansible.builtin.set_fact:
+    _syncthing_folders: >-
+      {{
+        syncthing_folders +
+        ([{
+          'id': syncthing_repos_folder_id,
+          'label': syncthing_repos_folder_label,
+          'path': github_repos_base_path | default('/opt/repos'),
+          'type': 'sendreceive',
+          'devices': syncthing_devices | map(attribute='name') | list
+        }] if (syncthing_sync_repos | bool and syncthing_devices | length > 0) else [])
+      }}
+
+- name: Debug folders configuration
+  ansible.builtin.debug:
+    msg: |
+      Syncthing folders to configure:
+      {% for folder in _syncthing_folders %}
+        - {{ folder.id }}: {{ folder.path }} ({{ folder.type }})
+          Shared with: {{ folder.devices | default([]) | join(', ') | default('none') }}
+      {% endfor %}
+      
+      Remote devices:
+      {% for device in syncthing_devices %}
+        - {{ device.name }}: {{ device.id }}
+      {% endfor %}
+  when: syncthing_devices | length > 0
 
 - name: Deploy Syncthing configuration
   ansible.builtin.template:
@@ -74,6 +112,8 @@
     group: "{{ syncthing_group }}"
     mode: '0600'
     backup: yes
+  vars:
+    syncthing_folders: "{{ _syncthing_folders }}"
   notify: Restart syncthing
 
 - name: Create sync folder directories
@@ -83,8 +123,8 @@
     owner: "{{ syncthing_user }}"
     group: "{{ syncthing_group }}"
     mode: '0755'
-  loop: "{{ syncthing_folders }}"
-  when: syncthing_folders | length > 0
+  loop: "{{ _syncthing_folders }}"
+  when: _syncthing_folders | length > 0
 
 - name: Deploy .stignore for github-repos folder
   ansible.builtin.template:
@@ -93,10 +133,10 @@
     owner: "{{ syncthing_user }}"
     group: "{{ syncthing_group }}"
     mode: '0644'
-  loop: "{{ syncthing_folders }}"
+  loop: "{{ _syncthing_folders }}"
   when:
-    - syncthing_folders | length > 0
-    - item.id == 'github-repos'
+    - _syncthing_folders | length > 0
+    - item.id == syncthing_repos_folder_id
 
 - name: Create systemd service for Syncthing
   ansible.builtin.copy:
@@ -133,3 +173,21 @@
     enabled: yes
     state: started
     daemon_reload: yes
+
+# Grant syncthing user access to repos directory
+- name: Add syncthing user to github repos group
+  ansible.builtin.user:
+    name: "{{ syncthing_user }}"
+    groups: "{{ github_repos_group | default('root') }}"
+    append: yes
+  when: syncthing_sync_repos | bool
+  notify: Restart syncthing
+
+- name: Ensure repos directory is accessible by syncthing
+  ansible.builtin.file:
+    path: "{{ github_repos_base_path | default('/opt/repos') }}"
+    state: directory
+    owner: "{{ syncthing_user }}"
+    group: "{{ syncthing_group }}"
+    mode: '0775'
+  when: syncthing_sync_repos | bool
