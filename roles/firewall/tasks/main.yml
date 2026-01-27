@@ -13,6 +13,14 @@
     name: ufw
     state: present
 
+# CRITICAL: Add SSH rules BEFORE resetting/enabling UFW to prevent lockout
+# These rules persist through the reset since we add them after
+
+# First, ensure UFW is disabled during configuration to prevent lockout
+- name: Disable UFW during configuration
+  community.general.ufw:
+    state: disabled
+
 # Reset UFW to clean state
 - name: Reset UFW to defaults
   community.general.ufw:
@@ -53,7 +61,6 @@
     group: root
     mode: '0640'
     backup: yes
-  notify: Reload UFW
 
 # Allow essential outbound traffic
 - name: Allow essential outbound traffic
@@ -65,10 +72,15 @@
     comment: "{{ item.comment }}"
   loop: "{{ firewall_outbound_allow }}"
 
+# ============================================
+# SSH RULES - Add these BEFORE enabling UFW!
+# ============================================
+
 # SSH from specific IPs only (if allowlist is defined)
 - name: Allow SSH from specific IPs only
   community.general.ufw:
     rule: limit
+    direction: in
     port: "{{ ssh_port | string }}"
     proto: tcp
     from_ip: "{{ item }}"
@@ -80,6 +92,7 @@
 - name: Allow SSH on port 22 from specific IPs (fallback)
   community.general.ufw:
     rule: limit
+    direction: in
     port: "22"
     proto: tcp
     from_ip: "{{ item }}"
@@ -94,6 +107,7 @@
 - name: Allow SSH with rate limiting (from anywhere)
   community.general.ufw:
     rule: limit
+    direction: in
     port: "{{ ssh_port | string }}"
     proto: tcp
     comment: "SSH rate-limited"
@@ -103,6 +117,7 @@
 - name: Allow SSH on port 22 (fallback)
   community.general.ufw:
     rule: limit
+    direction: in
     port: "22"
     proto: tcp
     comment: "SSH port 22 fallback"
@@ -111,7 +126,11 @@
     - ssh_keep_port_22 | default(false)
     - ssh_port != 22
 
-# Enable UFW
+# ============================================
+# NOW it's safe to enable UFW
+# ============================================
+
+# Enable UFW - SSH rules are already in place
 - name: Enable UFW
   community.general.ufw:
     state: enabled
@@ -121,3 +140,8 @@
     name: ufw
     enabled: yes
     state: started
+
+# Reload UFW to apply before.rules
+- name: Reload UFW to apply all rules
+  community.general.ufw:
+    state: reloaded
