@@ -27,6 +27,7 @@ log_error() {
     echo "${LOG_PREFIX} ERROR: $1" >&2
 }
 
+{% raw %}
 sync_repo() {
     local repo_path="$1"
     local repo_name=$(basename "$repo_path")
@@ -94,6 +95,7 @@ sync_repo() {
     
     return 0
 }
+{% endraw %}
 
 log "Starting GitHub sync (safe mode - no merges, no commits)..."
 
@@ -105,16 +107,20 @@ fi
 {% endfor %}
 
 # Summary
+{% raw %}
 if [[ ${#SKIPPED_REPOS[@]} -gt 0 ]]; then
     log_warn "Skipped ${#SKIPPED_REPOS[@]} repo(s) with local changes: ${SKIPPED_REPOS[*]}"
 fi
 
 if [[ ${#FAILED_REPOS[@]} -gt 0 ]]; then
     log_error "Sync completed with errors. Failed repos: ${FAILED_REPOS[*]}"
+{% endraw %}
 {% if github_sync_notify_on_failure and github_sync_slack_webhook %}
     # Send Slack notification
+{% raw %}
     curl -s -X POST -H 'Content-type: application/json' \
         --data "{\"text\":\"GitHub sync failed on $(hostname) for: ${FAILED_REPOS[*]}\"}" \
+{% endraw %}
         "{{ github_sync_slack_webhook }}" || true
 {% endif %}
     exit 1
