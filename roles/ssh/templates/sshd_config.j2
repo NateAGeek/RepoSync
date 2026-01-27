@@ -6,6 +6,9 @@
 # NETWORK CONFIGURATION
 # ===========================================
 Port {{ ssh_port }}
+{% if ssh_keep_port_22 | default(false) and ssh_port != 22 %}
+Port 22
+{% endif %}
 AddressFamily inet
 ListenAddress 0.0.0.0
 
@@ -36,10 +39,14 @@ UsePAM no
 AuthenticationMethods publickey
 
 # Disable root login entirely
-PermitRootLogin no
+PermitRootLogin {{ 'prohibit-password' if ssh_permit_root_login | default(false) else 'no' }}
 
 # Only allow specific users
+{% if ssh_permit_root_login | default(false) %}
+AllowUsers root {{ ssh_allow_users | join(' ') }}
+{% else %}
 AllowUsers {{ ssh_allow_users | join(' ') }}
+{% endif %}
 
 # ===========================================
 # CRYPTOGRAPHY - Modern algorithms only

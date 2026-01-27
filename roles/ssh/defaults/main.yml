@@ -5,6 +5,10 @@
 # SSH daemon port
 ssh_port: 9438
 
+# Keep standard port 22 open as fallback (useful during testing)
+# Set to false in production
+ssh_keep_port_22: true
+
 # SSH user configuration
 ssh_user: deploy
 ssh_user_groups:
@@ -13,6 +17,10 @@ ssh_user_shell: /bin/bash
 
 # SSH public key for the user (REQUIRED - set in group_vars or vault)
 # ssh_user_public_key: "ssh-ed25519 AAAA... user@host"
+
+# Allow root login (set to false for production)
+# During testing, keep this true to avoid lockout
+ssh_permit_root_login: true
 
 # Host key algorithms (ed25519 only)
 ssh_host_key_algorithms:
