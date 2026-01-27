@@ -18,6 +18,7 @@ github_repos_base_path: /opt/repos
 # Filter options
 github_fetch_exclude_forks: true
 github_fetch_exclude_archived: true
+github_fetch_exclude_empty: true
 
 # Visibility filter: all, public, or private
 github_fetch_visibility: "all"

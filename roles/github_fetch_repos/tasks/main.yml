@@ -55,6 +55,12 @@
     _github_filtered_repos: "{{ _github_filtered_repos | rejectattr('archived', 'equalto', true) | list }}"
   when: github_fetch_exclude_archived | bool
 
+# Filter out empty repositories (size == 0 or no default_branch)
+- name: Apply empty repo filter
+  ansible.builtin.set_fact:
+    _github_filtered_repos: "{{ _github_filtered_repos | selectattr('size', 'greaterthan', 0) | list }}"
+  when: github_fetch_exclude_empty | default(true) | bool
+
 # Transform to github_repos format
 - name: Build github_repos list
   ansible.builtin.set_fact:
@@ -88,6 +94,7 @@
       After filtering: {{ _github_filtered_repos | length }}
       Excluded forks: {{ github_fetch_exclude_forks }}
       Excluded archived: {{ github_fetch_exclude_archived }}
+      Excluded empty: {{ github_fetch_exclude_empty | default(true) }}
       
       Repositories to clone:
       {% for repo in github_repos %}

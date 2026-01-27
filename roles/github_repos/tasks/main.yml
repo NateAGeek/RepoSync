@@ -101,6 +101,27 @@
   become_user: "{{ item.owner | default(github_repos_owner) }}"
   loop: "{{ github_repos }}"
   when: github_repos | length > 0
+  register: clone_results
+  ignore_errors: yes
+
+- name: Report failed clones
+  ansible.builtin.debug:
+    msg: "WARNING: Failed to clone {{ item.item.repo }} - {{ item.msg | default('unknown error') }}"
+  loop: "{{ clone_results.results | default([]) }}"
+  when:
+    - clone_results is defined
+    - item.failed | default(false)
+  loop_control:
+    label: "{{ item.item.repo | default('unknown') }}"
+
+- name: Summary of clone results
+  ansible.builtin.debug:
+    msg: |
+      Clone Summary:
+        Total repos: {{ github_repos | length }}
+        Successful: {{ clone_results.results | default([]) | rejectattr('failed', 'defined') | list | length + clone_results.results | default([]) | selectattr('failed', 'equalto', false) | list | length }}
+        Failed: {{ clone_results.results | default([]) | selectattr('failed', 'defined') | selectattr('failed', 'equalto', true) | list | length }}
+  when: clone_results is defined
 
 - name: Set ownership on cloned repositories
   ansible.builtin.file:
